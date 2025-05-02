@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>An 'Normal' AI ChatBot</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>Aruuz AI</header>
+  <div id="chat-container" aria-live="polite" aria-label="Chat messages"></div>
+  <form id="input-form" autocomplete="off" aria-label="Chat input form">
+    <input type="text" id="user-input" aria-label="Enter message" placeholder="Say something..." required autofocus autocomplete="off" />
+    <button type="submit" id="send-btn" aria-label="Send message">Send</button>
+  </form>
+
+  <script src="script.js"></script>
+</body>
+</html>
