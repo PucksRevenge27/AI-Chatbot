@@ -26,7 +26,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Check learned data first
     for (const item of learnedData) {
       if (item.pattern.test(text)) {
-        return item.response;
+        const responses = item.responses;
+        return responses[Math.floor(Math.random() * responses.length)];
       }
     }
 
@@ -58,12 +59,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const pattern = new RegExp(userMessage, "i");
     // Check if the pattern already exists in learned data
     const existing = learnedData.find(item => item.pattern.toString() === pattern.toString());
-    if (!existing) {
-      // Add the new pattern-response pair
-      learnedData.push({ pattern, response: botResponse });
-      // Save to localStorage
-      localStorage.setItem(localLearnedDataKey, JSON.stringify(learnedData));
+    if (existing) {
+      if (!existing.responses.includes(botResponse)) {
+        existing.responses.push(botResponse); // Add new response
+      }
+    } else {
+      learnedData.push({ pattern, responses: [botResponse] });
     }
+    // Save to localStorage
+    localStorage.setItem(localLearnedDataKey, JSON.stringify(learnedData));
   }
 
   // Text generation using Markov Chain
@@ -71,7 +75,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (learnedData.length === 0) return null;
 
     // Collect all responses from learned data
-    const responses = learnedData.map(item => item.response);
+    const responses = learnedData.map(item => item.responses).flat();
 
     // Split responses into words to build the Markov Chain
     const words = responses.join(" ").split(/\s+/);
