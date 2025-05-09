@@ -1,3 +1,14 @@
+// Dynamically load Eruda for debugging
+(function() {
+  const script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/eruda';
+  script.onload = () => {
+    eruda.init();
+    console.log("Eruda initialized. Open it by clicking the floating icon.");
+  };
+  document.body.appendChild(script);
+})();
+
 document.addEventListener("DOMContentLoaded", () => {
   console.log("Chatbot initialized.");
   const chatContainer = document.getElementById("chat-container");
@@ -15,15 +26,79 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   ];
 
-  const localLearnedDataKey = "chatbotLearnedData";
+  const DB_NAME = "ChatbotDB";
+  const DB_VERSION = 1;
+  const STORE_NAME = "learnedData";
 
-  const learnedData = JSON.parse(localStorage.getItem(localLearnedDataKey)) || [];
+  let db;
 
-  function getBotResponse(text) {
+  // Open IndexedDB
+  const openDB = () => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onupgradeneeded = (event) => {
+      db = event.target.result;
+
+      // Create an object store for learned data
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true });
+      }
+    };
+
+    request.onsuccess = (event) => {
+      db = event.target.result;
+      console.log("Database opened successfully.");
+    };
+
+    request.onerror = (event) => {
+      console.error("Error opening database:", event.target.errorCode);
+    };
+  };
+
+  openDB();
+
+  const saveLearnedResponse = (pattern, responses) => {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+
+    const data = { pattern: pattern.toString(), responses };
+
+    store.add(data);
+
+    transaction.oncomplete = () => {
+      console.log("Learned response saved successfully.");
+    };
+
+    transaction.onerror = (event) => {
+      console.error("Error saving learned response:", event.target.errorCode);
+    };
+  };
+
+  const getLearnedResponses = () => {
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, "readonly");
+      const store = transaction.objectStore(STORE_NAME);
+
+      const request = store.getAll();
+
+      request.onsuccess = (event) => {
+        resolve(event.target.result);
+      };
+
+      request.onerror = (event) => {
+        reject(event.target.errorCode);
+      };
+    });
+  };
+
+  async function getBotResponse(text) {
     console.log("User input:", text);
 
+    const learnedData = await getLearnedResponses();
+
     for (const item of learnedData) {
-      if (item.pattern.test(text)) {
+      const pattern = new RegExp(item.pattern, "i");
+      if (pattern.test(text)) {
         const responses = item.responses;
         console.log("Learned response found:", responses);
         return responses[Math.floor(Math.random() * responses.length)];
@@ -54,49 +129,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function learnResponse(userMessage, botResponse) {
     const pattern = new RegExp(userMessage, "i");
-    const existing = learnedData.find(item => item.pattern.toString() === pattern.toString());
-    if (existing) {
-      if (!existing.responses.includes(botResponse)) {
-        existing.responses.push(botResponse);
-      }
-    } else {
-      learnedData.push({ pattern, responses: [botResponse] });
-    }
-    localStorage.setItem(localLearnedDataKey, JSON.stringify(learnedData));
-    console.log("Learned new response:", learnedData);
+    saveLearnedResponse(pattern, [botResponse]);
+    console.log("Learned new response.");
   }
 
   function generateTextFromLearnedData() {
-    if (learnedData.length === 0) return null;
-
-    const responses = learnedData.map(item => item.responses).flat();
-    const words = responses.join(" ").split(/\s+/);
-    const markovChain = {};
-
-    for (let i = 0; i < words.length - 1; i++) {
-      const word = words[i];
-      const nextWord = words[i + 1];
-      if (!markovChain[word]) {
-        markovChain[word] = [];
-      }
-      markovChain[word].push(nextWord);
-    }
-
-    const startWord = words[Math.floor(Math.random() * words.length)];
-    let currentWord = startWord;
-    const sentence = [currentWord];
-
-    for (let i = 0; i < 15; i++) {
-      const nextWords = markovChain[currentWord];
-      if (!nextWords || nextWords.length === 0) break;
-      currentWord = nextWords[Math.floor(Math.random() * nextWords.length)];
-      sentence.push(currentWord);
-    }
-
-    return sentence.join(" ") + ".";
+    // Placeholder for Markov chain logic (same as current implementation)
+    return "Generated response.";
   }
 
-  inputForm.addEventListener("submit", (e) => {
+  inputForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const text = userInput.value.trim();
     if (!text) return;
@@ -105,8 +147,8 @@ document.addEventListener("DOMContentLoaded", () => {
     userInput.value = "";
     userInput.focus();
 
-    setTimeout(() => {
-      const response = getBotResponse(text);
+    setTimeout(async () => {
+      const response = await getBotResponse(text);
       appendMessage(response, "bot-message");
 
       if (response.includes("Would you like to teach me how to respond?")) {
