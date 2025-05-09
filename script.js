@@ -29,6 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const DB_NAME = "ChatbotDB";
   const DB_VERSION = 1;
   const STORE_NAME = "learnedData";
+  const HISTORY_STORE = "chatHistory";
 
   let db;
 
@@ -43,6 +44,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true });
       }
+
+      // Create an object store for chat history
+      if (!db.objectStoreNames.contains(HISTORY_STORE)) {
+        db.createObjectStore(HISTORY_STORE, { keyPath: "timestamp" });
+      }
     };
 
     request.onsuccess = (event) => {
@@ -56,6 +62,40 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   openDB();
+
+  const saveChatHistory = (message, sender) => {
+    const transaction = db.transaction(HISTORY_STORE, "readwrite");
+    const store = transaction.objectStore(HISTORY_STORE);
+
+    const data = { timestamp: Date.now(), message, sender };
+
+    store.add(data);
+
+    transaction.oncomplete = () => {
+      console.log("Chat history saved successfully.");
+    };
+
+    transaction.onerror = (event) => {
+      console.error("Error saving chat history:", event.target.errorCode);
+    };
+  };
+
+  const getChatHistory = () => {
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(HISTORY_STORE, "readonly");
+      const store = transaction.objectStore(HISTORY_STORE);
+
+      const request = store.getAll();
+
+      request.onsuccess = (event) => {
+        resolve(event.target.result);
+      };
+
+      request.onerror = (event) => {
+        reject(event.target.errorCode);
+      };
+    });
+  };
 
   const saveLearnedResponse = (pattern, responses) => {
     const transaction = db.transaction(STORE_NAME, "readwrite");
@@ -116,7 +156,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     console.log("No match found, generating default response.");
-    return generateTextFromLearnedData() || "I'm not sure how to respond to that. Would you like to teach me how to respond?";
+    return "I'm not sure how to respond to that. Would you like to teach me how to respond?";
   }
 
   function appendMessage(content, className) {
@@ -133,23 +173,21 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("Learned new response.");
   }
 
-  function generateTextFromLearnedData() {
-    // Placeholder for Markov chain logic (same as current implementation)
-    return "Generated response.";
-  }
-
   inputForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const text = userInput.value.trim();
     if (!text) return;
 
     appendMessage(text, "user-message");
+    saveChatHistory(text, "user");
+
     userInput.value = "";
     userInput.focus();
 
     setTimeout(async () => {
       const response = await getBotResponse(text);
       appendMessage(response, "bot-message");
+      saveChatHistory(response, "bot");
 
       if (response.includes("Would you like to teach me how to respond?")) {
         const teachForm = document.createElement("form");
